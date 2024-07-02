@@ -1,6 +1,6 @@
 import tkinter as tk
-from tkinter import ttk
-from tkinter import messagebox
+from tkinter import ttk, messagebox
+from tkinter.filedialog import asksaveasfilename
 from fpdf import FPDF
 
 class InvoicePDF(FPDF):
@@ -23,8 +23,8 @@ class InvoicePDF(FPDF):
         self.set_font('Arial', 'B', 10)
         self.cell(0, 10, 'Bill To:', 0, 1)
         self.set_font('Arial', '', 10)
-        self.cell(0, 10, customer_name, 0, 1)
-        self.cell(0, 10, customer_address, 0, 1)
+        self.multi_cell(0, 10, customer_name)
+        self.multi_cell(0, 10, customer_address)
         self.ln(10)
 
     def itemized_list(self, items):
@@ -44,7 +44,6 @@ class InvoicePDF(FPDF):
 
     def summary(self, subtotal, tax, total):
         self.set_font('Arial', '', 10)
-        self.cell(0, 10, '', 0, 1)
         self.cell(110, 10, '', 0)
         self.cell(30, 10, 'Subtotal', 1)
         self.cell(30, 10, f"${subtotal:.2f}", 1, 1)
@@ -66,68 +65,208 @@ class InvoiceApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Invoice Generator")
-        self.geometry("400x400")
+        self.geometry("820x700")
 
-        # Labels and Entry widgets for invoice information
-        tk.Label(self, text="Invoice Number:").grid(row=0, column=0, padx=10, pady=5)
-        self.invoice_number = tk.Entry(self)
+        self.items = []
+
+        # Styling
+        style = ttk.Style(self)
+        style.configure('TButton', font=('Arial', 10), padding=5)
+        style.configure('TLabel', font=('Arial', 11))
+        style.configure('TEntry', font=('Arial', 11))
+
+        # Invoice information inputs
+        ttk.Label(self, text="Invoice Number:").grid(row=0, column=0, padx=10, pady=5)
+        self.invoice_number = ttk.Entry(self)
         self.invoice_number.grid(row=0, column=1, padx=10, pady=5)
 
-        tk.Label(self, text="Invoice Date:").grid(row=1, column=0, padx=10, pady=5)
-        self.invoice_date = tk.Entry(self)
+        ttk.Label(self, text="Invoice Date:").grid(row=1, column=0, padx=10, pady=5)
+        self.invoice_date = ttk.Entry(self)
         self.invoice_date.grid(row=1, column=1, padx=10, pady=5)
 
-        tk.Label(self, text="Due Date:").grid(row=2, column=0, padx=10, pady=5)
-        self.due_date = tk.Entry(self)
+        ttk.Label(self, text="Due Date:").grid(row=2, column=0, padx=10, pady=5)
+        self.due_date = ttk.Entry(self)
         self.due_date.grid(row=2, column=1, padx=10, pady=5)
 
-        tk.Label(self, text="Customer Name:").grid(row=3, column=0, padx=10, pady=5)
-        self.customer_name = tk.Entry(self)
+        ttk.Label(self, text="Customer Name:").grid(row=3, column=0, padx=10, pady=5)
+        self.customer_name = ttk.Entry(self)
         self.customer_name.grid(row=3, column=1, padx=10, pady=5)
 
-        tk.Label(self, text="Customer Address:").grid(row=4, column=0, padx=10, pady=5)
-        self.customer_address = tk.Entry(self)
+        ttk.Label(self, text="Customer Address:").grid(row=4, column=0, padx=10, pady=5)
+        self.customer_address = ttk.Entry(self)
         self.customer_address.grid(row=4, column=1, padx=10, pady=5)
 
-        # Button to add items
-        self.items = []
-        self.add_item_button = tk.Button(self, text="Add Item", command=self.add_item)
-        self.add_item_button.grid(row=5, column=0, columnspan=2, pady=10)
+        # Items count label
+        self.item_count_label = ttk.Label(self, text="Items attached: 0")
+        self.item_count_label.grid(row=5, column=0, columnspan=2, pady=10)
 
-        # Button to generate PDF
-        self.generate_pdf_button = tk.Button(self, text="Generate PDF", command=self.generate_pdf)
-        self.generate_pdf_button.grid(row=6, column=0, columnspan=2, pady=10)
+        # Items table
+        self.items_treeview = ttk.Treeview(self, columns=('description', 'quantity', 'unit_price', 'total_price'), show='headings', height=10)
+        self.items_treeview.heading('description', text='Description')
+        self.items_treeview.heading('quantity', text='Quantity')
+        self.items_treeview.heading('unit_price', text='Unit Price')
+        self.items_treeview.heading('total_price', text='Total Price')
+        self.items_treeview.grid(row=6, column=0, columnspan=2, padx=10, pady=5)
+
+        # Item input fields
+        ttk.Label(self, text="Description:").grid(row=7, column=0, padx=10, pady=5)
+        self.item_description = ttk.Entry(self)
+        self.item_description.grid(row=7, column=1, padx=10, pady=5)
+
+        ttk.Label(self, text="Quantity:").grid(row=8, column=0, padx=10, pady=5)
+        self.item_quantity = ttk.Entry(self)
+        self.item_quantity.grid(row=8, column=1, padx=10, pady=5)
+
+        ttk.Label(self, text="Unit Price:").grid(row=9, column=0, padx=10, pady=5)
+        self.item_unit_price = ttk.Entry(self)
+        self.item_unit_price.grid(row=9, column=1, padx=10, pady=5)
+
+        # Add Item button
+        self.add_item_button = ttk.Button(self, text="Add Item", command=self.add_item)
+        self.add_item_button.grid(row=10, column=0, padx=10, pady=10)
+
+        # Generate PDF button
+        self.generate_pdf_button = ttk.Button(self, text="Generate PDF", command=self.generate_pdf)
+        self.generate_pdf_button.grid(row=10, column=1, padx=10, pady=10)
+
+        # Remove Item button
+        self.remove_item_button = ttk.Button(self, text="Remove Item", command=self.remove_item)
+        self.remove_item_button.grid(row=11, column=0, columnspan=2, padx=10, pady=10)
+
+        # Set up Treeview to be editable
+        self.setup_treeview_editable()
+
+    def setup_treeview_editable(self):
+        # Enable editing of Treeview cells
+        self.items_treeview.bind('<Double-1>', self.on_treeview_double_click)
+
+    def on_treeview_double_click(self, event):
+        # Get selected item
+        item_id = self.items_treeview.selection()[0]
+        item = self.items_treeview.item(item_id)
+
+        # Get column index and value
+        col = self.items_treeview.identify_column(event.x)
+        col_index = int(str(col).replace('#', ''))
+        column_name = self.items_treeview.heading(col, 'text')
+
+        # Only allow editing of 'Quantity' and 'Unit Price' columns
+        if column_name in ['Quantity', 'Unit Price']:
+            # Create Entry widget for editing
+            entry_edit = tk.Entry(self, bd=1, relief=tk.SUNKEN)
+            entry_edit.grid(row=self.items_treeview.index(item_id)+6, column=col_index, sticky="nsew")  # Adjusted row index
+
+            # Insert current value into Entry widget
+            entry_edit.insert(0, item['values'][col_index])
+
+            # Bind Return key press to save changes
+            entry_edit.bind('<Return>', lambda event, item_id=item_id, col_index=col_index, column_name=column_name, entry_edit=entry_edit: self.on_edit_complete(event, item_id, col_index, column_name, entry_edit))
+
+            # Set focus on the Entry widget
+            entry_edit.focus_set()
+
+    def on_edit_complete(self, event, item_id, col_index, column_name, entry_edit):
+        # Get edited value from Entry widget
+        new_value = entry_edit.get()
+
+        # Update Treeview with new value
+        self.items_treeview.set(item_id, column_name, new_value)
+
+        # Destroy Entry widget
+        entry_edit.destroy()
+
+        # Update items list with new values
+        for item in self.items:
+            if item_id == item['id']:
+                if column_name == 'Quantity':
+                    item['quantity'] = int(new_value)
+                    item['total_price'] = item['quantity'] * item['unit_price']
+                elif column_name == 'Unit Price':
+                    item['unit_price'] = float(new_value)
+                    item['total_price'] = item['quantity'] * item['unit_price']
+
+        # Update item count label and refresh summary
+        self.update_item_count_label()
+        self.update_summary()
 
     def add_item(self):
-        item_window = tk.Toplevel(self)
-        item_window.title("Add Item")
+        description = self.item_description.get()
+        quantity = self.item_quantity.get()
+        unit_price = self.item_unit_price.get()
 
-        tk.Label(item_window, text="Description:").grid(row=0, column=0, padx=10, pady=5)
-        description_entry = tk.Entry(item_window)
-        description_entry.grid(row=0, column=1, padx=10, pady=5)
+        if not description or not quantity or not unit_price:
+            messagebox.showerror("Error", "Please fill in all fields for the item.")
+            return
 
-        tk.Label(item_window, text="Quantity:").grid(row=1, column=0, padx=10, pady=5)
-        quantity_entry = tk.Entry(item_window)
-        quantity_entry.grid(row=1, column=1, padx=10, pady=5)
-
-        tk.Label(item_window, text="Unit Price:").grid(row=2, column=0, padx=10, pady=5)
-        unit_price_entry = tk.Entry(item_window)
-        unit_price_entry.grid(row=2, column=1, padx=10, pady=5)
-
-        def save_item():
-            description = description_entry.get()
-            quantity = int(quantity_entry.get())
-            unit_price = float(unit_price_entry.get())
+        try:
+            quantity = int(quantity)
+            unit_price = float(unit_price)
             total_price = quantity * unit_price
+            item_id = len(self.items) + 1
             self.items.append({
+                'id': item_id,
                 'description': description,
                 'quantity': quantity,
                 'unit_price': unit_price,
                 'total_price': total_price
             })
-            item_window.destroy()
+            self.update_items_table()
+            self.update_item_count_label()
+            self.clear_item_fields()
+            self.update_summary()
+        except ValueError:
+            messagebox.showerror("Error", "Please enter valid numbers for quantity and unit price.")
 
-        tk.Button(item_window, text="Save", command=save_item).grid(row=3, column=0, columnspan=2, pady=10)
+    def update_items_table(self):
+        self.items_treeview.delete(*self.items_treeview.get_children())
+        for item in self.items:
+            self.items_treeview.insert('', 'end', values=(item['description'], item['quantity'], f"${item['unit_price']:.2f}", f"${item['total_price']:.2f}"))
+
+    def remove_item(self):
+        # Get selected item
+        item_id = self.items_treeview.selection()[0]
+    
+        confirm = messagebox.askyesno("Confirmation", "Are you sure you want to delete the selected item?")
+        if not confirm:
+            return
+
+        for i, item in enumerate(self.items):
+            # Compare as strings since item_id is a string
+            if item['id'] == item_id:
+                del self.items[i]
+                break
+
+        self.items_treeview.delete(item_id)
+        self.update_item_count_label()
+        self.update_summary()
+
+    def clear_item_fields(self):
+        self.item_description.delete(0, tk.END)
+        self.item_quantity.delete(0, tk.END)
+        self.item_unit_price.delete(0, tk.END)
+
+    def update_item_count_label(self):
+        self.item_count_label.config(text=f"Items attached: {len(self.items)}")
+
+    def update_summary(self):
+        subtotal = sum(item['total_price'] for item in self.items)
+        tax = subtotal * 0.07
+        total = subtotal + tax
+
+        # If labels are not initialized, create them
+        if not hasattr(self, 'subtotal_label'):
+            self.subtotal_label = ttk.Label(self, text="")
+            self.subtotal_label.grid(row=7, column=0, padx=10, pady=5)
+        if not hasattr(self, 'tax_label'):
+            self.tax_label = ttk.Label(self, text="")
+            self.tax_label.grid(row=8, column=0, padx=10, pady=5)
+        if not hasattr(self, 'total_label'):
+            self.total_label = ttk.Label(self, text="")
+            self.total_label.grid(row=9, column=0, padx=10, pady=5)
+
+        self.subtotal_label.config(text=f"${subtotal:.2f}")
+        self.tax_label.config(text=f"${tax:.2f}")
+        self.total_label.config(text=f"${total:.2f}")
 
     def generate_pdf(self):
         invoice_number = self.invoice_number.get()
@@ -152,9 +291,10 @@ class InvoiceApp(tk.Tk):
         pdf.summary(subtotal, tax, total)
         pdf.footer()
 
-        pdf_file_path = 'invoice.pdf'
-        pdf.output(pdf_file_path)
-        messagebox.showinfo("Success", f"Invoice PDF generated successfully and saved as {pdf_file_path}")
+        pdf_file_path = asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")])
+        if pdf_file_path:
+            pdf.output(pdf_file_path)
+            messagebox.showinfo("Success", f"Invoice PDF generated successfully and saved as {pdf_file_path}")
 
 if __name__ == "__main__":
     app = InvoiceApp()
