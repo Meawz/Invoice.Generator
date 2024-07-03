@@ -157,7 +157,7 @@ class InvoiceApp(tk.Tk):
             entry_edit.grid(row=self.items_treeview.index(item_id)+6, column=col_index, sticky="nsew")  # Adjusted row index
 
             # Insert current value into Entry widget
-            entry_edit.insert(0, item['values'][col_index])
+            entry_edit.insert(0, item['values'][col_index-1])
 
             # Bind Return key press to save changes
             entry_edit.bind('<Return>', lambda event, item_id=item_id, col_index=col_index, column_name=column_name, entry_edit=entry_edit: self.on_edit_complete(event, item_id, col_index, column_name, entry_edit))
@@ -166,28 +166,25 @@ class InvoiceApp(tk.Tk):
             entry_edit.focus_set()
 
     def on_edit_complete(self, event, item_id, col_index, column_name, entry_edit):
-        # Get edited value from Entry widget
         new_value = entry_edit.get()
 
-        # Update Treeview with new value
-        self.items_treeview.set(item_id, column_name, new_value)
+        # Update the item in the Treeview with the new value
+        self.items_treeview.set(item_id, column=col_index-1, value=new_value)
 
-        # Destroy Entry widget
+        # Update the item in the items list
+        item_index = self.items_treeview.index(item_id)
+        if column_name == 'Quantity':
+            self.items[item_index]['quantity'] = int(new_value)
+            self.items[item_index]['total_price'] = self.items[item_index]['quantity'] * self.items[item_index]['unit_price']
+        elif column_name == 'Unit Price':
+            self.items[item_index]['unit_price'] = float(new_value)
+            self.items[item_index]['total_price'] = self.items[item_index]['quantity'] * self.items[item_index]['unit_price']
+
+        # Update the Treeview with the new total price
+        self.items_treeview.set(item_id, column=3, value=f"${self.items[item_index]['total_price']:.2f}")
+
+        # Remove the Entry widget
         entry_edit.destroy()
-
-        # Update items list with new values
-        for item in self.items:
-            if item_id == item['id']:
-                if column_name == 'Quantity':
-                    item['quantity'] = int(new_value)
-                    item['total_price'] = item['quantity'] * item['unit_price']
-                elif column_name == 'Unit Price':
-                    item['unit_price'] = float(new_value)
-                    item['total_price'] = item['quantity'] * item['unit_price']
-
-        # Update item count label and refresh summary
-        self.update_item_count_label()
-        self.update_summary()
 
     def add_item(self):
         description = self.item_description.get()
@@ -195,78 +192,43 @@ class InvoiceApp(tk.Tk):
         unit_price = self.item_unit_price.get()
 
         if not description or not quantity or not unit_price:
-            messagebox.showerror("Error", "Please fill in all fields for the item.")
+            messagebox.showerror("Error", "Please fill in all item fields.")
             return
 
         try:
             quantity = int(quantity)
             unit_price = float(unit_price)
             total_price = quantity * unit_price
-            item_id = len(self.items) + 1
-            self.items.append({
-                'id': item_id,
+
+            item = {
                 'description': description,
                 'quantity': quantity,
                 'unit_price': unit_price,
                 'total_price': total_price
-            })
-            self.update_items_table()
-            self.update_item_count_label()
-            self.clear_item_fields()
-            self.update_summary()
-        except ValueError:
-            messagebox.showerror("Error", "Please enter valid numbers for quantity and unit price.")
+            }
+            self.items.append(item)
 
-    def update_items_table(self):
-        self.items_treeview.delete(*self.items_treeview.get_children())
-        for item in self.items:
-            self.items_treeview.insert('', 'end', values=(item['description'], item['quantity'], f"${item['unit_price']:.2f}", f"${item['total_price']:.2f}"))
+            self.items_treeview.insert('', 'end', values=(description, quantity, f"${unit_price:.2f}", f"${total_price:.2f}"))
+            self.item_description.delete(0, tk.END)
+            self.item_quantity.delete(0, tk.END)
+            self.item_unit_price.delete(0, tk.END)
+
+            self.item_count_label.config(text=f"Items attached: {len(self.items)}")
+
+        except ValueError:
+            messagebox.showerror("Error", "Quantity must be an integer and Unit Price must be a float.")
 
     def remove_item(self):
-        # Get selected item
-        item_id = self.items_treeview.selection()[0]
-    
-        confirm = messagebox.askyesno("Confirmation", "Are you sure you want to delete the selected item?")
-        if not confirm:
+        selected_item = self.items_treeview.selection()
+        if not selected_item:
+            messagebox.showerror("Error", "Please select an item to remove.")
             return
 
-        for i, item in enumerate(self.items):
-            # Compare as strings since item_id is a string
-            if item['id'] == item_id:
-                del self.items[i]
-                break
+        item_index = self.items_treeview.index(selected_item[0])
+        self.items.pop(item_index)
+        self.items_treeview.delete(selected_item)
 
-        self.items_treeview.delete(item_id)
-        self.update_item_count_label()
-        self.update_summary()
-
-    def clear_item_fields(self):
-        self.item_description.delete(0, tk.END)
-        self.item_quantity.delete(0, tk.END)
-        self.item_unit_price.delete(0, tk.END)
-
-    def update_item_count_label(self):
         self.item_count_label.config(text=f"Items attached: {len(self.items)}")
-
-    def update_summary(self):
-        subtotal = sum(item['total_price'] for item in self.items)
-        tax = subtotal * 0.07
-        total = subtotal + tax
-
-        # If labels are not initialized, create them
-        if not hasattr(self, 'subtotal_label'):
-            self.subtotal_label = ttk.Label(self, text="")
-            self.subtotal_label.grid(row=7, column=0, padx=10, pady=5)
-        if not hasattr(self, 'tax_label'):
-            self.tax_label = ttk.Label(self, text="")
-            self.tax_label.grid(row=8, column=0, padx=10, pady=5)
-        if not hasattr(self, 'total_label'):
-            self.total_label = ttk.Label(self, text="")
-            self.total_label.grid(row=9, column=0, padx=10, pady=5)
-
-        self.subtotal_label.config(text=f"${subtotal:.2f}")
-        self.tax_label.config(text=f"${tax:.2f}")
-        self.total_label.config(text=f"${total:.2f}")
 
     def generate_pdf(self):
         invoice_number = self.invoice_number.get()
