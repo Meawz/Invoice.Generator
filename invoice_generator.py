@@ -65,7 +65,7 @@ class InvoiceApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Invoice Generator")
-        self.geometry("820x700")
+        self.geometry("1280x720")
 
         self.items = []
 
